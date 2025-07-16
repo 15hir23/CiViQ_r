@@ -9,6 +9,9 @@ function Chat() {
   const chatAreaRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [history, setHistory] = useState([
+    { role: 'system', content: "You are a helpful, friendly AI assistant." }
+  ]);
 
   const addMessage = (content, isUser = false) => {
     const chatArea = chatAreaRef.current;
@@ -55,27 +58,62 @@ function Chat() {
     if (typingIndicator) typingIndicator.remove();
   };
 
-  const simulateAIResponse = (userMessage) => {
-    const responses = [
-      "Analyzing your request. Pulling insights...",
-      "Fetching data from connected sources...",
-      "Here’s what your data reveals...",
-      "Processing your input, one moment...",
-      "Key patterns found! Displaying results..."
-    ];
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-
+  // DeepSeek API integration with conversation history
+  const fetchAIResponse = async (userMessage) => {
     addTypingIndicator();
     setIsTyping(true);
-
-    setTimeout(() => {
+    const updatedHistory = [
+      ...history,
+      { role: 'user', content: userMessage }
+    ];
+    setHistory(updatedHistory);
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gemma3',
+          messages: updatedHistory,
+          stream: false
+        })
+      });
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        removeTypingIndicator();
+        addMessage('API returned non-JSON response. Status: ' + response.status);
+        console.error('Non-JSON response:', jsonErr, response);
+        setIsTyping(false);
+        if (sendBtnRef.current) sendBtnRef.current.disabled = false;
+        return;
+      }
       removeTypingIndicator();
-      addMessage(randomResponse);
-      setIsTyping(false);
-      if (sendBtnRef.current) sendBtnRef.current.disabled = false;
-    }, Math.random() * 2000 + 2000);
+      if (!response.ok) {
+        addMessage('API error: ' + response.status + (data?.error ? (', ' + (data.error.message || data.error)) : ''));
+        console.error('API error:', data);
+      } else if (data && data.message && data.message.content) {
+        addMessage(data.message.content);
+        setHistory([...updatedHistory, { role: 'assistant', content: data.message.content }]);
+      } else if (data.error) {
+        addMessage('AI Error: ' + (data.error.message || data.error));
+        console.error('AI error:', data);
+      } else {
+        addMessage('Sorry, I could not understand that.');
+        console.error('Unexpected API response:', data);
+      }
+    } catch (err) {
+      removeTypingIndicator();
+      addMessage('Network or API error. Please try again later.');
+      console.error('Network/API error:', err);
+    }
+    setIsTyping(false);
+    if (sendBtnRef.current) sendBtnRef.current.disabled = false;
   };
 
+  // Update sendMessage to use fetchAIResponse and update history
   const sendMessage = () => {
     const textarea = textareaRef.current;
     const sendBtn = sendBtnRef.current;
@@ -85,7 +123,7 @@ function Chat() {
       textarea.value = "";
       textarea.style.height = "auto";
       sendBtn.disabled = true;
-      simulateAIResponse(input);
+      fetchAIResponse(input);
     }
   };
 
