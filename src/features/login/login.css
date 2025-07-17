@@ -450,3 +450,19 @@
                 flex-direction: column;
             }
         }
+        /* ---------- Auth mode toggle ---------- */
+    .auth-toggle-text {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    }
+
+    .toggle-link {
+    color: var(--teal-primary);
+    cursor: pointer;
+    font-weight: 600;
+    }
+
+    .toggle-link:hover {
+    color: var(--teal-secondary);
+    }
